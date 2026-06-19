@@ -9,8 +9,18 @@
 </head>
 <body>
   <header class="report-header">
-    <h1>Trial Match Report</h1>
-    <div class="report-meta">NCT ID: {{ primary_match.nct_id }}</div>
+    <div class="report-header-title">
+      <h1>Trial Match Report</h1>
+      <div class="report-meta">NCT ID: {{ primary_match.nct_id }}</div>
+    </div>
+    <div class="patient-header-box">
+      <div class="patient-header-label">Patient</div>
+      <table class="kv-table">
+        {% for row in patient_header %}
+        <tr><th>{{ row.label }}</th><td>{{ row.value }}</td></tr>
+        {% endfor %}
+      </table>
+    </div>
   </header>
 
   {% include "_primary_match.html" %}
@@ -18,6 +28,7 @@
   {% include "_ctg_matches.html" %}
   {% include "_patient_detail.html" %}
   {% include "_methods.html" %}
+  {% include "_abbreviations.html" %}
   {% include "_disclaimer.html" %}
 
   <footer class="report-footer">

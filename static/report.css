@@ -18,6 +18,14 @@ body {
   border-bottom: 2px solid #2c3e50;
   margin-bottom: 16px;
   padding-bottom: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.report-header-title {
+  flex: 1;
 }
 
 .report-header h1 {
@@ -29,6 +37,30 @@ body {
 .report-meta {
   font-size: 9pt;
   color: #555;
+}
+
+.patient-header-box {
+  border: 1px solid #c5ccd6;
+  border-radius: 3px;
+  padding: 6px 10px;
+  background: #f4f6f8;
+  min-width: 220px;
+  max-width: 280px;
+}
+
+.patient-header-label {
+  font-size: 7pt;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: #2c3e50;
+  margin-bottom: 4px;
+}
+
+.patient-header-box .kv-table th,
+.patient-header-box .kv-table td {
+  font-size: 8pt;
+  padding: 1px 4px 1px 0;
 }
 
 .section {
@@ -185,6 +217,32 @@ body {
   color: #444;
   margin: 0;
   line-height: 1.5;
+}
+
+.section-abbreviations {
+  background: #f8f9fa;
+  border: 1px solid #e0e0e0;
+  padding: 8px 12px;
+}
+
+.abbrev-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.abbrev-table th, .abbrev-table td {
+  font-size: 8.5pt;
+  color: #444;
+  padding: 2px 8px 2px 0;
+  vertical-align: top;
+  text-align: left;
+}
+
+.abbrev-table th {
+  font-weight: 700;
+  color: #2c3e50;
+  white-space: nowrap;
+  width: 60px;
 }
 
 .section-disclaimer {

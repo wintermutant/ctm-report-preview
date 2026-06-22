@@ -10,6 +10,7 @@ data/normalized/*
 !data/normalized/patient_genetic/.gitkeep
 data/output/
 data/test/*
+data/dump/*
 .env
 *.egg-info/
 dist/

@@ -32,8 +32,10 @@ class RawPatientGeneral(BaseModel):
     last_name: str | None = None
     dob: date | datetime | str | None = None
     sex: str | None = None
+    vital_status: str | None = None
     entity: str | None = None
     primary_dx: str | None = None
+    oncotree_primary_diagnosis: str | None = None
     metastasis_sites: str | None = None
 
     @field_validator("dob", mode="before")
@@ -67,6 +69,8 @@ class RawTempusFinding(BaseModel):
     pt_uuid: int
     report_uuid: int
     gene: str | None = None
+    protein: str | None = None
+    nucleotide: str | None = None
     variant_type: str | None = None
     result_summary: str | None = None
     raw_biomarker: str | None = None
@@ -82,6 +86,8 @@ class RawCarisFinding(BaseModel):
     pt_uuid: int
     report_uuid: int
     gene: str | None = None
+    protein: str | None = None
+    nucleotide: str | None = None
     variant_type: str | None = None
     result_summary: str | None = None
     # specimen info — repeats on every finding row for this report
@@ -121,6 +127,8 @@ class RawAmbryFinding(BaseModel):
     pt_uuid: int
     report_uuid: int
     gene: str | None = None
+    protein: str | None = None
+    nucleotide: str | None = None
     variant_type: str | None = None
     result_summary: str | None = None
     raw_pathogenic_mutations: str | None = None
@@ -133,6 +141,8 @@ class RawAmcNgsFinding(BaseModel):
     pt_uuid: int
     report_uuid: int
     gene: str | None = None
+    protein: str | None = None
+    nucleotide: str | None = None
     variant_type: str | None = None
     result_summary: str | None = None
     # specimen info — repeats per row
@@ -154,6 +164,8 @@ class RawOgmFinding(BaseModel):
     pt_uuid: int
     report_uuid: int
     gene: str | None = None
+    protein: str | None = None
+    nucleotide: str | None = None
     variant_type: str | None = None
     result_summary: str | None = None
     raw_selected_results: str | None = None
@@ -166,6 +178,8 @@ class RawPmlRaraFinding(BaseModel):
     pt_uuid: int
     report_uuid: int
     gene: str | None = None
+    protein: str | None = None
+    nucleotide: str | None = None
     variant_type: str | None = None
     result_summary: str | None = None
     raw_test_result: str | None = None

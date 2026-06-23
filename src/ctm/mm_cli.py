@@ -2,19 +2,13 @@
 
 Usage:
   ctm-mm raw-to-mm PATH/TO/patient_data_template.xlsx [options]
-  ctm-mm raw-to-mm --json PATH/TO/mm_data.json [options]
 
 Options:
-  --json PATH    Load pre-converted matchminer JSON ({clinical, genomic}) instead of Excel
-  --pt-uuid N    Filter to one patient by pt_uuid (Excel path only)
-  --dry-run      Print generated documents as JSON, do not write to MongoDB
-  --out PATH     Save JSON output to file (implies --dry-run)
-  --mongo-uri    Override CTM_MONGO_URI env var
-  --db NAME      MongoDB database name (default: matchminer)
+  --pt-uuid N    Filter to one patient by pt_uuid
+  --out PATH     Save JSON output to file (default: print to stdout)
 """
 import argparse
 import json
-import os
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -32,67 +26,52 @@ def main() -> None:
 
     p = sub.add_parser(
         "raw-to-mm",
-        help="Read Excel template (or pre-converted JSON) → upsert MatchMiner docs in MongoDB",
+        help="Normalize Excel template → matchminer-compatible JSON ({clinical, genomic})",
     )
-    p.add_argument("excel", nargs="?", metavar="EXCEL",
+    p.add_argument("excel", metavar="EXCEL",
                    help="Path to patient_data_template.xlsx")
-    p.add_argument("--json", metavar="PATH", dest="json_path",
-                   help="Load pre-converted matchminer JSON ({clinical, genomic}) instead of Excel")
     p.add_argument("--pt-uuid", type=int, dest="pt_uuid", metavar="N",
-                   help="Filter to one patient by pt_uuid (Excel only)")
-    p.add_argument("--dry-run", action="store_true",
-                   help="Print output JSON without writing to MongoDB")
+                   help="Filter to one patient by pt_uuid")
     p.add_argument("--out", metavar="PATH",
-                   help="Save output JSON to this file (implies --dry-run)")
-    p.add_argument("--mongo-uri", dest="mongo_uri", metavar="URI",
-                   help="Override CTM_MONGO_URI env var")
-    p.add_argument("--db", dest="db_name", default="matchminer", metavar="NAME",
-                   help="MongoDB database name (default: matchminer)")
+                   help="Save JSON output to file (default: print to stdout)")
 
     args = parser.parse_args()
 
     if args.command == "raw-to-mm":
-        if args.json_path and args.excel:
-            print("Error: pass either EXCEL or --json, not both.", file=sys.stderr)
-            sys.exit(1)
-        if not args.json_path and not args.excel:
-            print("Error: provide EXCEL path or --json PATH.", file=sys.stderr)
-            sys.exit(1)
-        if args.json_path:
-            _cmd_json_to_mm(args)
-        else:
-            _cmd_raw_to_mm(args)
+        _cmd_raw_to_mm(args)
 
 
-def _cmd_json_to_mm(args) -> None:
-    json_path = Path(args.json_path)
-    if not json_path.exists():
-        print(f"Error: file not found: {json_path}", file=sys.stderr)
-        sys.exit(1)
+def _build_extras(patients: list, metadata: list, findings: list) -> dict:
+    if not patients:
+        return {}
+    patient = patients[0]
+    pt_uuid = patient.pt_uuid
 
-    print(f"Loading {json_path} ...")
-    data = json.loads(json_path.read_text())
-    all_clinical = data.get("clinical", [])
-    all_genomic = data.get("genomic", [])
+    findings_by_report: dict[int, list] = {}
+    for f in [f for f in findings if f.pt_uuid == pt_uuid]:
+        findings_by_report.setdefault(f.report_uuid, []).append({
+            "gene": f.gene,
+            "protein": f.protein,
+            "nucleotide": f.nucleotide,
+            "variant_type": f.variant_type,
+            "result_summary": f.result_summary,
+            "raw": f.raw,
+        })
 
-    if not all_clinical:
-        print("Error: no clinical docs found in JSON.", file=sys.stderr)
-        sys.exit(1)
+    pt_metadata = [m for m in metadata if m.pt_uuid == pt_uuid]
+    reports = [
+        {
+            "source": m.source,
+            "test_name": m.test_name,
+            "accession_no": m.accession_no,
+            "physician": m.physician,
+            "date_completed": m.date_completed.isoformat() if m.date_completed else None,
+            "findings": findings_by_report.get(m.report_uuid, []),
+        }
+        for m in pt_metadata
+    ]
 
-    print(f"  {len(all_clinical)} clinical doc(s)  {len(all_genomic)} genomic doc(s)")
-
-    dry_run = args.dry_run or args.out is not None
-
-    if dry_run:
-        json_str = json.dumps({"clinical": all_clinical, "genomic": all_genomic}, indent=2, default=str)
-        if args.out:
-            Path(args.out).write_text(json_str)
-            print(f"Saved → {args.out}")
-        else:
-            print(json_str)
-        return
-
-    _upsert_to_mongo(all_clinical, all_genomic, args)
+    return {"patient": patient.model_dump(), "reports": reports}
 
 
 def _cmd_raw_to_mm(args) -> None:
@@ -104,16 +83,16 @@ def _cmd_raw_to_mm(args) -> None:
         print(f"Error: file not found: {excel_path}", file=sys.stderr)
         sys.exit(1)
 
-    print(f"Reading {excel_path} ...")
+    print(f"Reading {excel_path} ...", file=sys.stderr)
     patients, metadata, findings = read_and_normalize(excel_path, pt_uuid_filter=args.pt_uuid)
 
     if not patients:
         print("No patients found (check --pt-uuid or pt_general sheet).", file=sys.stderr)
         sys.exit(1)
 
-    print(f"  {len(patients)} patient(s)  {len(metadata)} report(s)  {len(findings)} finding(s)")
+    print(f"  {len(patients)} patient(s)  {len(metadata)} report(s)  {len(findings)} finding(s)",
+          file=sys.stderr)
 
-    # Group by patient
     findings_by_pt: dict[int, list] = defaultdict(list)
     for f in findings:
         findings_by_pt[f.pt_uuid].append(f)
@@ -139,59 +118,20 @@ def _cmd_raw_to_mm(args) -> None:
         all_genomic.extend(genomic)
 
         print(f"  pt_uuid={patient.pt_uuid}  mrn={patient.mrn}  "
-              f"→ {len(genomic)} genomic doc(s)")
+              f"→ {len(genomic)} genomic doc(s)", file=sys.stderr)
 
-    dry_run = args.dry_run or args.out is not None
+    output = {
+        "clinical": all_clinical,
+        "genomic": all_genomic,
+        "extras": _build_extras(patients, metadata, findings),
+    }
+    json_str = json.dumps(output, indent=2, default=str)
 
-    if dry_run:
-        output = {
-            "clinical": all_clinical,
-            "genomic": all_genomic,
-        }
-        json_str = json.dumps(output, indent=2, default=str)
-        if args.out:
-            Path(args.out).write_text(json_str)
-            print(f"Saved → {args.out}")
-        else:
-            print(json_str)
-        return
-
-    _upsert_to_mongo(all_clinical, all_genomic, args)
-
-
-def _upsert_to_mongo(all_clinical: list[dict], all_genomic: list[dict], args) -> None:
-    try:
-        from pymongo import MongoClient
-    except ImportError:
-        print("Error: pymongo not installed.", file=sys.stderr)
-        sys.exit(1)
-
-    uri = args.mongo_uri or os.getenv("CTM_MONGO_URI", "mongodb://localhost:27017")
-    db_name = args.db_name or os.getenv("MM_MONGO_DB", "matchminer")
-    db = MongoClient(uri)[db_name]
-
-    n_clinical = 0
-    n_genomic = 0
-
-    for clinical_doc in all_clinical:
-        sample_id = clinical_doc["SAMPLE_ID"]
-
-        db["clinical"].replace_one({"SAMPLE_ID": sample_id}, clinical_doc, upsert=True)
-        inserted = db["clinical"].find_one({"SAMPLE_ID": sample_id}, {"_id": 1})
-        clinical_id = inserted["_id"]
-
-        pt_genomic = [g for g in all_genomic if g["SAMPLE_ID"] == sample_id]
-        if pt_genomic:
-            db["genomic"].delete_many({"SAMPLE_ID": sample_id})
-            for g in pt_genomic:
-                g["CLINICAL_ID"] = clinical_id
-            db["genomic"].insert_many(pt_genomic)
-            n_genomic += len(pt_genomic)
-
-        n_clinical += 1
-
-    print(f"\nUpserted {n_clinical} clinical doc(s)  {n_genomic} genomic doc(s)")
-    print(f"  → {uri}/{db_name}  (collections: clinical, genomic)")
+    if args.out:
+        Path(args.out).write_text(json_str)
+        print(f"Saved → {args.out}", file=sys.stderr)
+    else:
+        print(json_str)
 
 
 if __name__ == "__main__":

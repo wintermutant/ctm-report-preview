@@ -17,7 +17,6 @@ dependencies = [
 ]
 
 [project.scripts]
-ctm-process = "ctm.cli:main"
 ctm-mm = "ctm.mm_cli:main"
 ctm-report = "ctm.report_cli:main"
 

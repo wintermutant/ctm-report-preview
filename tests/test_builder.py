@@ -131,3 +131,122 @@ def test_render_html_from_sources_returns_html():
     html = render_html_from_sources(str(EXCEL), str(FIXTURES / "mm_export_7439568.json"))
     assert "<html" in html
     assert "Trial Match Report" in html
+
+
+# ---------------------------------------------------------------------------
+# Task 5: load_context_from_normalized_json
+# ---------------------------------------------------------------------------
+
+def _make_normalized_json(tmp_path):
+    data = {
+        "clinical": {
+            "SAMPLE_ID": "302939",
+            "VITAL_STATUS": "Alive",
+            "ONCOTREE_PRIMARY_DIAGNOSIS_NAME": "READ",
+        },
+        "genomic": [
+            {"SAMPLE_ID": "302939", "TRUE_HUGO_SYMBOL": "ERBB2", "VARIANT_CATEGORY": "MUTATION"}
+        ],
+        "extras": {
+            "patient": {
+                "pt_uuid": 0,
+                "mrn": "302939",
+                "first_name": "Larry",
+                "last_name": "Corum",
+                "dob": None,
+                "sex": None,
+                "vital_status": None,
+                "entity": "AMC",
+                "primary_dx": "mid-rectal adenocarcinoma",
+                "oncotree_primary_diagnosis": "READ",
+                "metastasis_sites": ["liver", "bone"],
+            },
+            "reports": [
+                {
+                    "source": "tempus",
+                    "test_name": "xT CDx",
+                    "accession_no": "TL-26-001",
+                    "physician": "Dr. Smith",
+                    "date_completed": "2026-03-07",
+                    "findings": [
+                        {
+                            "gene": "ERBB2",
+                            "protein": "p.T733I",
+                            "nucleotide": None,
+                            "variant_type": "somatic_mutation",
+                            "result_summary": "53.2% VAF",
+                            "raw": {"raw_test": "ERBB2 (HER2) p.T733I", "raw_result": "53.2% VAF"},
+                        }
+                    ],
+                }
+            ],
+        },
+    }
+    path = tmp_path / "normalized_pt.json"
+    path.write_text(json.dumps(data))
+    return path
+
+
+def test_normalized_json_returns_required_keys(tmp_path):
+    from ctm.reports.builder import load_context_from_normalized_json
+    ctx = load_context_from_normalized_json(str(_make_normalized_json(tmp_path)))
+    assert "patient_header" in ctx
+    assert "patient_detail" in ctx
+    assert "reports" in ctx
+    assert isinstance(ctx["patient_header"], list)
+    assert isinstance(ctx["reports"], list)
+
+
+def test_normalized_json_patient_header_has_name(tmp_path):
+    from ctm.reports.builder import load_context_from_normalized_json
+    ctx = load_context_from_normalized_json(str(_make_normalized_json(tmp_path)))
+    labels = [r["label"] for r in ctx["patient_header"]]
+    assert "First Name" in labels
+    assert "Last Name" in labels
+
+
+def test_normalized_json_metastasis_sites_is_string(tmp_path):
+    from ctm.reports.builder import load_context_from_normalized_json
+    ctx = load_context_from_normalized_json(str(_make_normalized_json(tmp_path)))
+    detail = {r["label"]: r["value"] for r in ctx["patient_detail"]}
+    assert detail["Metastasis Sites"] == "liver, bone"
+
+
+def test_normalized_json_reports_include_raw_fields(tmp_path):
+    from ctm.reports.builder import load_context_from_normalized_json
+    ctx = load_context_from_normalized_json(str(_make_normalized_json(tmp_path)))
+    all_findings = [f for r in ctx["reports"] for f in r.get("findings", [])]
+    assert any(f.get("raw") for f in all_findings)
+
+
+def test_normalized_json_missing_file_returns_empty():
+    from ctm.reports.builder import load_context_from_normalized_json
+    ctx = load_context_from_normalized_json("/nonexistent/path.json")
+    assert ctx["patient_header"] == []
+    assert ctx["patient_detail"] == []
+    assert ctx["reports"] == []
+
+
+# ---------------------------------------------------------------------------
+# Task 6: render_html_from_pt_and_matches
+# ---------------------------------------------------------------------------
+
+def test_render_html_from_pt_and_matches_returns_html(tmp_path):
+    from ctm.reports.builder import render_html_from_pt_and_matches
+    html = render_html_from_pt_and_matches(
+        str(_make_normalized_json(tmp_path)),
+        str(FIXTURES / "mm_export_7439568.json"),
+        "mm",
+    )
+    assert "<html" in html
+    assert "Trial Match Report" in html
+
+
+def test_render_html_from_pt_and_matches_unknown_engine_raises(tmp_path):
+    from ctm.reports.builder import render_html_from_pt_and_matches
+    with pytest.raises(ValueError, match="Unknown match engine"):
+        render_html_from_pt_and_matches(
+            str(_make_normalized_json(tmp_path)),
+            str(FIXTURES / "mm_export_7439568.json"),
+            "trialmatchai",
+        )

@@ -270,8 +270,55 @@ def load_context_from_raw_excel(excel_path: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Public orchestrator: merge both sources and render
+# Public loader: normalized JSON (output of ctm-mm raw-to-mm)
 # ---------------------------------------------------------------------------
+
+def load_context_from_normalized_json(pt_path: str) -> dict:
+    _empty = {"patient_header": [], "patient_detail": [], "reports": []}
+    try:
+        data = json.loads(Path(pt_path).read_text())
+    except (FileNotFoundError, OSError):
+        return _empty
+
+    extras = data.get("extras", {})
+    if not extras:
+        return _empty
+
+    patient = dict(extras.get("patient", {}))
+    metastasis = patient.get("metastasis_sites")
+    if isinstance(metastasis, list):
+        patient["metastasis_sites"] = ", ".join(metastasis or [])
+
+    return {
+        "patient_header": _extract(patient, PATIENT_HEADER_FIELDS),
+        "patient_detail": _extract(patient, PATIENT_DETAIL_FIELDS),
+        "reports": extras.get("reports", []),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Public orchestrators
+# ---------------------------------------------------------------------------
+
+def render_html_from_pt_and_matches(pt_path: str, matches_path: str, engine: str) -> str:
+    pt_ctx = load_context_from_normalized_json(pt_path)
+    if engine == "mm":
+        mm_ctx = load_context_from_mm_matches(matches_path)
+    else:
+        raise ValueError(f"Unknown match engine: {engine!r}")
+    ctx = {**pt_ctx, **mm_ctx}
+    ctx["methods"] = []
+    ctx["provenance"] = {
+        "generated_on": datetime.now().strftime("%d%b%Y"),
+        "data_source": DATA_SOURCE_VERSION,
+        "sample_id": mm_ctx.get("sample_id", ""),
+        "record_hash": "",
+    }
+    env = Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)))
+    template = env.get_template("report.html")
+    css = (STATIC_DIR / "report.css").read_text()
+    return template.render(css=css, **ctx)
+
 
 def render_html_from_sources(excel_path: str, mm_export_path: str) -> str:
     excel_ctx = load_context_from_raw_excel(excel_path)

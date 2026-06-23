@@ -83,3 +83,40 @@ def test_mm_no_arm_match_falls_back_to_step():
         assert ctx["primary_match"]["nct_id"] == "NCT00000001"
     finally:
         os.unlink(tmp)
+
+
+# ---------------------------------------------------------------------------
+# Task 3: load_context_from_raw_excel
+# ---------------------------------------------------------------------------
+
+def test_excel_patient_header_contains_mrn():
+    from ctm.reports.builder import load_context_from_raw_excel
+    ctx = load_context_from_raw_excel(str(EXCEL))
+    labels = [r["label"] for r in ctx["patient_header"]]
+    assert "MRN" in labels
+
+
+def test_excel_returns_required_keys():
+    from ctm.reports.builder import load_context_from_raw_excel
+    ctx = load_context_from_raw_excel(str(EXCEL))
+    assert "patient_header" in ctx
+    assert "patient_detail" in ctx
+    assert "reports" in ctx
+    assert isinstance(ctx["patient_header"], list)
+    assert isinstance(ctx["reports"], list)
+
+
+def test_excel_reports_include_raw_fields():
+    from ctm.reports.builder import load_context_from_raw_excel
+    ctx = load_context_from_raw_excel(str(EXCEL))
+    all_findings = [f for r in ctx["reports"] for f in r.get("findings", [])]
+    raw_dicts = [f["raw"] for f in all_findings if f.get("raw")]
+    assert len(raw_dicts) > 0
+
+
+def test_excel_missing_file_returns_empty_context():
+    from ctm.reports.builder import load_context_from_raw_excel
+    ctx = load_context_from_raw_excel("/nonexistent/path.xlsx")
+    assert ctx["patient_header"] == []
+    assert ctx["patient_detail"] == []
+    assert ctx["reports"] == []

@@ -14,18 +14,18 @@ DATA_SOURCE_VERSION = "TrialDBv0.1-jun26"
 
 PATIENT_HEADER_FIELDS = {
     "mrn": "MRN",
+    "first_name": "First Name",
+    "last_name": "Last Name",
     "sex": "Gender",
+    "dob": "Date of Birth",
     "vital_status": "Vital Status",
-    "primary_dx": "Diagnosis",
-    "tmb_per_mb": "TMB*",
+    "entity": "Institution",
+    "oncotree_primary_diagnosis": "Diagnosis (OncoTree)",
 }
 
 PATIENT_DETAIL_FIELDS = {
-    "ecog": "ECOG Performance Status",
-    "prior_lines_of_therapy": "Prior Lines of Therapy",
-    "smoking_history": "Smoking History",
-    "brain_metastases": "Brain Metastases",
-    "most_recent_imaging": "Most Recent Imaging",
+    "primary_dx": "Primary Diagnosis",
+    "metastasis_sites": "Metastasis Sites",
 }
 
 GENOMIC_FIELDS = {
@@ -205,6 +205,53 @@ def load_context_from_mm_matches(mm_export_path: str) -> dict:
     return {
         "primary_match": _build_primary_match_context(primary) if primary else None,
         "other_matches": _build_other_matches(visible, primary),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Public loader: Excel workbook
+# ---------------------------------------------------------------------------
+
+def _build_reports_context(metadata: list, findings: list) -> list[dict]:
+    findings_by_report: dict[int, list] = {}
+    for f in findings:
+        findings_by_report.setdefault(f.report_uuid, []).append({
+            "gene": f.gene,
+            "protein": f.protein,
+            "variant_type": f.variant_type,
+            "result_summary": f.result_summary,
+            "raw": f.raw,
+        })
+    return [
+        {
+            "source": m.source,
+            "test_name": m.test_name,
+            "accession_no": m.accession_no,
+            "physician": m.physician,
+            "date_completed": m.date_completed.isoformat() if m.date_completed else None,
+            "findings": findings_by_report.get(m.report_uuid, []),
+        }
+        for m in metadata
+    ]
+
+
+def load_context_from_raw_excel(excel_path: str) -> dict:
+    _empty = {"patient_header": [], "patient_detail": [], "reports": []}
+    try:
+        from ctm.transformers.excel_reader import read_and_normalize
+        patients, metadata, findings = read_and_normalize(Path(excel_path))
+    except (FileNotFoundError, OSError):
+        return _empty
+
+    if not patients:
+        return _empty
+
+    patient_dict = patients[0].model_dump()
+
+    return {
+        "patient_header": _extract(patient_dict, PATIENT_HEADER_FIELDS),
+        "patient_detail": _extract(patient_dict, PATIENT_DETAIL_FIELDS),
+        "reports": _build_reports_context(metadata, findings),
     }
 
 

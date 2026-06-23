@@ -120,3 +120,14 @@ def test_excel_missing_file_returns_empty_context():
     assert ctx["patient_header"] == []
     assert ctx["patient_detail"] == []
     assert ctx["reports"] == []
+
+
+# ---------------------------------------------------------------------------
+# Task 4: render_html_from_sources
+# ---------------------------------------------------------------------------
+
+def test_render_html_from_sources_returns_html():
+    from ctm.reports.builder import render_html_from_sources
+    html = render_html_from_sources(str(EXCEL), str(FIXTURES / "mm_export_7439568.json"))
+    assert "<html" in html
+    assert "Trial Match Report" in html

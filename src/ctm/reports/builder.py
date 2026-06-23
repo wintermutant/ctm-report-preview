@@ -255,6 +255,27 @@ def load_context_from_raw_excel(excel_path: str) -> dict:
     }
 
 
+# ---------------------------------------------------------------------------
+# Public orchestrator: merge both sources and render
+# ---------------------------------------------------------------------------
+
+def render_html_from_sources(excel_path: str, mm_export_path: str) -> str:
+    excel_ctx = load_context_from_raw_excel(excel_path)
+    mm_ctx = load_context_from_mm_matches(mm_export_path)
+    ctx = {**excel_ctx, **mm_ctx}
+    ctx["methods"] = []
+    ctx["provenance"] = {
+        "generated_on": datetime.now().strftime("%d%b%Y"),
+        "data_source": DATA_SOURCE_VERSION,
+        "sample_id": (mm_ctx.get("primary_match") or {}).get("nct_id", ""),
+        "record_hash": "",
+    }
+    env = Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)))
+    template = env.get_template("report.html")
+    css = (STATIC_DIR / "report.css").read_text()
+    return template.render(css=css, **ctx)
+
+
 def render_html(use_real: bool = False, context_override: dict | None = None) -> str:
     env = Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)))
     template = env.get_template("report.html")

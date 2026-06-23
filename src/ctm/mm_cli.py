@@ -2,9 +2,11 @@
 
 Usage:
   ctm-mm raw-to-mm PATH/TO/patient_data_template.xlsx [options]
+  ctm-mm raw-to-mm --json PATH/TO/mm_data.json [options]
 
 Options:
-  --pt-uuid N    Process only patient with this pt_uuid (default: all patients)
+  --json PATH    Load pre-converted matchminer JSON ({clinical, genomic}) instead of Excel
+  --pt-uuid N    Filter to one patient by pt_uuid (Excel path only)
   --dry-run      Print generated documents as JSON, do not write to MongoDB
   --out PATH     Save JSON output to file (implies --dry-run)
   --mongo-uri    Override CTM_MONGO_URI env var
@@ -30,11 +32,14 @@ def main() -> None:
 
     p = sub.add_parser(
         "raw-to-mm",
-        help="Read Excel template → upsert MatchMiner clinical + genomic docs in MongoDB",
+        help="Read Excel template (or pre-converted JSON) → upsert MatchMiner docs in MongoDB",
     )
-    p.add_argument("excel", metavar="EXCEL", help="Path to patient_data_template.xlsx")
+    p.add_argument("excel", nargs="?", metavar="EXCEL",
+                   help="Path to patient_data_template.xlsx")
+    p.add_argument("--json", metavar="PATH", dest="json_path",
+                   help="Load pre-converted matchminer JSON ({clinical, genomic}) instead of Excel")
     p.add_argument("--pt-uuid", type=int, dest="pt_uuid", metavar="N",
-                   help="Filter to one patient by pt_uuid")
+                   help="Filter to one patient by pt_uuid (Excel only)")
     p.add_argument("--dry-run", action="store_true",
                    help="Print output JSON without writing to MongoDB")
     p.add_argument("--out", metavar="PATH",
@@ -47,7 +52,47 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.command == "raw-to-mm":
-        _cmd_raw_to_mm(args)
+        if args.json_path and args.excel:
+            print("Error: pass either EXCEL or --json, not both.", file=sys.stderr)
+            sys.exit(1)
+        if not args.json_path and not args.excel:
+            print("Error: provide EXCEL path or --json PATH.", file=sys.stderr)
+            sys.exit(1)
+        if args.json_path:
+            _cmd_json_to_mm(args)
+        else:
+            _cmd_raw_to_mm(args)
+
+
+def _cmd_json_to_mm(args) -> None:
+    json_path = Path(args.json_path)
+    if not json_path.exists():
+        print(f"Error: file not found: {json_path}", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"Loading {json_path} ...")
+    data = json.loads(json_path.read_text())
+    all_clinical = data.get("clinical", [])
+    all_genomic = data.get("genomic", [])
+
+    if not all_clinical:
+        print("Error: no clinical docs found in JSON.", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"  {len(all_clinical)} clinical doc(s)  {len(all_genomic)} genomic doc(s)")
+
+    dry_run = args.dry_run or args.out is not None
+
+    if dry_run:
+        json_str = json.dumps({"clinical": all_clinical, "genomic": all_genomic}, indent=2, default=str)
+        if args.out:
+            Path(args.out).write_text(json_str)
+            print(f"Saved → {args.out}")
+        else:
+            print(json_str)
+        return
+
+    _upsert_to_mongo(all_clinical, all_genomic, args)
 
 
 def _cmd_raw_to_mm(args) -> None:
@@ -111,7 +156,10 @@ def _cmd_raw_to_mm(args) -> None:
             print(json_str)
         return
 
-    # ── Write to MongoDB ───────────────────────────────────────────────────────
+    _upsert_to_mongo(all_clinical, all_genomic, args)
+
+
+def _upsert_to_mongo(all_clinical: list[dict], all_genomic: list[dict], args) -> None:
     try:
         from pymongo import MongoClient
     except ImportError:
@@ -128,12 +176,10 @@ def _cmd_raw_to_mm(args) -> None:
     for clinical_doc in all_clinical:
         sample_id = clinical_doc["SAMPLE_ID"]
 
-        # Upsert clinical (replace entire doc if exists)
         db["clinical"].replace_one({"SAMPLE_ID": sample_id}, clinical_doc, upsert=True)
         inserted = db["clinical"].find_one({"SAMPLE_ID": sample_id}, {"_id": 1})
         clinical_id = inserted["_id"]
 
-        # Replace all genomic docs for this patient
         pt_genomic = [g for g in all_genomic if g["SAMPLE_ID"] == sample_id]
         if pt_genomic:
             db["genomic"].delete_many({"SAMPLE_ID": sample_id})

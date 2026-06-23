@@ -85,8 +85,8 @@ def load_context(use_real: bool = False) -> dict:
         _row("Cancer Type Match", raw_match.get("cancer_type_match")),
         _row("Reason Type", raw_match.get("reason_type")),
         _row("Match Type", raw_match.get("match_type")),
-        _row("Age Eligibility", "18–75 years"),  #mock
-        _row("ECOG Status", "0–2"),  #mock
+        _row("Age Eligibility", "18-75 years"),  #mock
+        _row("ECOG Status", "0-2"),  #mock
         _row("Location", "Ann Arbor, MI"),  #mock
     ]
 

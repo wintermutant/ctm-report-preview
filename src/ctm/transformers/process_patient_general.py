@@ -3,7 +3,7 @@
 Raw input: see ctm/schemas/raw/patient_general.py
 Processed output: PatientGeneral (ctm/schemas/processed/patient_general.py)
 """
-from ctm.schemas.processed.patient_general import PatientGeneral
+from ctm.schemas.processed.models import PatientGeneral
 
 __version__ = "0.1.0"
 

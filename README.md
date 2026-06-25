@@ -1,18 +1,23 @@
-# Clinical Trial Match Integration Toolkit
+# Clinical Trial Match Integration Toolkit ⚒️
 
 This repo prepares data from various sources to integrate with popular open-source clinical trial matching software (MatchMiner supported, TrialMatchAI at some point). Once clinical trial matching has completed, it interfaces with the structured output (from MatchMiner and TrialMatchAI) to provide a report for the patient. See example workflow:
 
 ```bash
 # Create MatchMiner-formatted patient data from raw excel format
 ctm patients <patient_data_template.xlsx> --pt-uuid 1234 --out pt_1234.json
+
 # Create MatchMiner-formatted trial data from raw yaml formats
 ctm trials --sparrow <trials.yaml> --amc <trials.yaml> --west <trials.yaml> --out trials.json
+
 # load the data into MatchMiner's database
 python -m matchengine.main load -t path/to/trials/trials.json --trial-format json --db test
+
 # run matchminer
 python -m Matcher.main --config source/Matcher/config/config.json
+
 # export MatchMiner data
 SECRETS_JSON=SECRETS_JSON.json python export_matches.py --patient 7439568 --output export/ --db v1
+
 # create report from matchminer data 
 ctm-report --pt data/patient.json --matches /data/matchminer_export.json --engine mm --out output.pdf
 ```

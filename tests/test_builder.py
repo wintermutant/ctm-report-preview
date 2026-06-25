@@ -89,10 +89,10 @@ def test_mm_no_arm_match_falls_back_to_step():
 # Task 3: load_context_from_raw_excel
 # ---------------------------------------------------------------------------
 
-def test_excel_patient_header_contains_mrn():
+def test_excel_patient_detail_contains_mrn():
     from ctm.reports.builder import load_context_from_raw_excel
     ctx = load_context_from_raw_excel(str(EXCEL))
-    labels = [r["label"] for r in ctx["patient_header"]]
+    labels = [r["label"] for r in ctx["patient_detail"]]
     assert "MRN" in labels
 
 

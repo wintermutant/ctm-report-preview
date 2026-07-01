@@ -4,10 +4,10 @@ This repo prepares data from various sources to integrate with popular open-sour
 
 ```bash
 # Create MatchMiner-formatted patient data from raw excel format
-ctm patients <patient_data_template.xlsx> --pt-uuid 1234 --out pt_1234.json
+ctm-mm patients <patient_data_template.xlsx> --pt-uuid 1234 --out pt_1234.json
 
 # Create MatchMiner-formatted trial data from raw yaml formats
-ctm trials --sparrow <trials.yaml> --amc <trials.yaml> --west <trials.yaml> --out trials.json
+ctm-mm trials --sparrow <trials.yaml> --amc <trials.yaml> --west <trials.yaml> --ct <clinicaltrials.gov JSON> --out trials.json
 
 # load the data into MatchMiner's database
 python -m matchengine.main load -t path/to/trials/trials.json --trial-format json --db test
@@ -42,9 +42,14 @@ Clinical data is kind of an overloaded term, but it refers to general patient de
 1. Raw --> Normalized Patient Data
    1. Fill out patient_data_template.xlsx
    2. Run `$ ctm-mm patients ...`
-2. Raw --> Normalized Trial Data
-   1. Fill out the yaml file according to templates in `data/raw/*.yaml` for each entity (Sparrow, West, AMC)
-   2. Run `$ ctm-mm trials ...`
+2. Raw --> Normalized Trial Data. This is much more complex since we have 4 data sources (Sparrow, West, AMC, and ClinicalTrials.gov)
+   1. For AMC, you can point to the XML file to create a structure very similar to Matchminer:
+      1. `$ ctm-mm trials --amc nct-raw.json --out to-normalized.json`
+      2. Above produces a .JSON file that needs a little bit of manual curation to be ingested by MatchMiner
+   2. For ClinicalTrials.gov data, you can fetch a particular trial by NCT number and then normalize to the same format as AMC
+      1. Run `$ ctm-fetch --nct NCT03067181 --output nct-raw.json --fmt-mm`
+      2. You can also run `$ ctm-mm trials --ct <raw-ctgov.json> --out to-normalized.json`
+   3. Ensure you finish **manually curating** for (1) and (2)
 3. Load in the new data to MatchMiner
    1. `$ python -m matchengine.main load ...`
 4. Execute the match!
@@ -62,6 +67,7 @@ Clinical data is kind of an overloaded term, but it refers to general patient de
   fields we want to preserve, MongoDB-friendly. This is the stable record.
 - `schemas/processed/` - Pydantic models for the fully transformed, engine-ready output. One transformer module per engine.
 - `schemas/matchminer` - Schemas specifically for integrating with MatchMiner.
+  - These still take **manual input processing**
 - `schemas/trialmatchai` - Schemas specifically for integrating with TrialMatchAI.
 
 **Why two layers?** Separating normalization from engine-specific transformation means new
